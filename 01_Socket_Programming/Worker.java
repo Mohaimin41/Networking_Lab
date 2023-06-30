@@ -9,7 +9,6 @@ import java.net.Socket;
 import java.util.Hashtable;
 import java.util.Set;
 
-
 class FileInfo {
 
     boolean isPrivate;
@@ -25,6 +24,9 @@ class FileInfo {
 class Worker extends Thread {
     /** The socket with client */
     Socket socket;
+
+    ObjectInputStream in;
+    ObjectOutputStream out;
     /** The File obj for main ftp directory */
     File mainFtpDir;
     /** the File obj for client directory */
@@ -37,8 +39,10 @@ class Worker extends Thread {
     Set<String> activeClientList;
     /** the Set of all client names */
     Set<String> allClientList;
-    /** HashTable of fileID and FileInfo */
+    /** HashTable of String fileID and FileInfo objects for clients file */
     Hashtable<String, FileInfo> fileTable;
+    /** HashTable mapping clientName to Hashtable of clients files */
+    Hashtable<String, Hashtable<String, FileInfo>> clientToFileIDMap = new Hashtable<String, Hashtable<String, FileInfo>>();
 
     /**
      * @param e the Exception e to be traced in the exception log file
@@ -57,7 +61,7 @@ class Worker extends Thread {
         } catch (IOException e1) {
             e1.printStackTrace();
         }
-        
+
     }
 
     /**
@@ -90,11 +94,11 @@ class Worker extends Thread {
 
     /**
      * sends a ServerFtpMessage containing the file name, file id and file privacy
-     * of files in client Directory
+     * of files in client Directory or all other clients public files
      * 
      * @param out the socket ObjectOutputStream to write to
      */
-    void listClientFiles(ObjectOutputStream out) {
+    void sendClientFileList(ObjectOutputStream out) {
         String clientFileList = "FILEID \t\t FILE \t\t PRIVACY\n";
         for (String fileID : fileTable.keySet()) {
             clientFileList += fileID + " \t\t " + fileTable.get(fileID).file.getName() + " \t\t "
@@ -107,6 +111,99 @@ class Worker extends Thread {
         } catch (IOException e) {
             addToErrors(e);
         }
+    }
+
+    /**
+     * sends list of all public files of all the other users
+     * 
+     * @param out the socket ObjectOutputStream to write to
+     */
+    void sendAllFileList(ObjectOutputStream out) {
+        String message = "";
+
+        for (String clientName : clientToFileIDMap.keySet()) {
+            message += "USER: " + clientName + "\nFILEID \t\t FILE \t\t PRIVACY\n";
+
+            for (String fileId : clientToFileIDMap.get(clientName).keySet()) {
+                if (!(clientToFileIDMap.get(clientName).get(fileId).isPrivate)) {
+                    message += fileId + " \t\t " + clientToFileIDMap.get(clientName).get(fileId).file.getName()
+                            + " \t\t Public\n";
+                }
+            }
+        }
+
+        ServerMessage serverMessage = new ServerMessage(SERVER_PACKET_TYPE.ALL_FILE_LIST);
+        serverMessage.putMessage(message);
+        try {
+            out.writeObject(serverMessage);
+        } catch (IOException e) {
+            addToErrors(e);
+        }
+    }
+
+    /**
+     * sends list of all public files of all the other users
+     * 
+     * @param out the socket ObjectOutputStream to write to
+     */
+    void sendAllUserList(ObjectOutputStream out) {
+        String message = "All clients:\n";
+        for (String client : allClientList) {
+            message += client + ((activeClientList.contains(client)) ? "(active)\n" : "\n");
+        }
+
+        ServerMessage serverMessage = new ServerMessage(SERVER_PACKET_TYPE.CLIENT_LIST);
+        serverMessage.putMessage(message);
+        try {
+            out.writeObject(serverMessage);
+        } catch (Exception e) {
+            addToErrors(e);
+        }
+    }
+
+    /**
+     * logs out client by closing it's socket
+     * TODO: handle things in upload n download
+     * 
+     * @param out the client socket OutputObjectStream
+     * @return true if successfully closed socket, false otherwise
+     */
+    boolean handleLogoutRequest(ObjectOutputStream out) {
+        ServerMessage serverMessage = new ServerMessage(SERVER_PACKET_TYPE.LOGOUT_RESPONSE);
+        serverMessage.putMessage("Success");
+        try {
+            out.writeObject(serverMessage);
+            activeClientList.remove(clientName);
+            socket.close();
+        } catch (Exception e) {
+            addToErrors(e);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * broadcast file request to all clients and send response to this client
+     * 
+     * @param clientMessage ClientFtpMessage recieved from client with file request
+     *                      description
+     * @param out           client Socket ObjectOutputStream to write to
+     * @return true if successfully broadcast message and sent response to client,
+     *         false otherwise
+     */
+    boolean handleFileRequest(ClientMessage clientMessage, ObjectOutputStream out) {
+        // TODO: handle broadcast message and message queues
+
+        ServerMessage serverMessage = new ServerMessage(SERVER_PACKET_TYPE.IMMEDIATE_FILE_REQUEST_RESPONSE);
+        // TODO: Conditioned on successful broadcast
+        serverMessage.putMessage("Success");
+        try {
+            out.writeObject(serverMessage);
+        } catch (Exception e) {
+            addToErrors(e);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -128,6 +225,24 @@ class Worker extends Thread {
         this.fileTable = new Hashtable<String, FileInfo>();
     }
 
+    /**
+     * @param serverData the SharedServerData object holding relevant data objects
+     * @param clientName String name of client this thread will be associated to
+     */
+    public Worker(SharedServerData serverData, String clientName, Socket socket, ObjectInputStream in,
+            ObjectOutputStream out) {
+        this.socket = socket;
+        this.exceptionLog = serverData.exceptionLog;
+        this.clientName = clientName;
+        this.activeClientList = serverData.activeClients;
+        this.allClientList = serverData.allClients;
+        this.mainFtpDir = serverData.mainFtpDir;
+        this.fileTable = new Hashtable<String, FileInfo>();
+        this.clientToFileIDMap = serverData.clientToFileIDMap;
+        this.out = out;
+        this.in = in;
+    }
+
     public void run() {
         int makeClientDirectoryStatus = makeClientDirectory();
         if (makeClientDirectoryStatus == 1) {
@@ -137,21 +252,25 @@ class Worker extends Thread {
         try {
             // buffers
 
-            ObjectOutputStream out = new ObjectOutputStream(this.socket.getOutputStream());
-            ObjectInputStream in = new ObjectInputStream(this.socket.getInputStream());
+            // ObjectOutputStream out = new ObjectOutputStream( socket.getOutputStream());
+            // ObjectInputStream in = new ObjectInputStream( socket.getInputStream());
 
             while (true) {
                 ClientMessage clientMessage = (ClientMessage) in.readObject();
                 if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.ALL_FILE_LIST_REQUEST) {
+                    sendAllFileList(out);
 
                 } else if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.CLIENT_LIST_REQUEST) {
-
+                    sendAllUserList(out);
                 } else if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.FILE_LIST_REQUEST) {
-
+                    sendClientFileList(out);
                 } else if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.FILE_REQUEST) {
-
+                    handleFileRequest(clientMessage, out);
                 } else if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.LOGOUT_REQUEST) {
-
+                    boolean logoutStatus = handleLogoutRequest(out);
+                    if (logoutStatus) {
+                        return;
+                    }
                 } else if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.UPLOAD_INITATE_REQUEST) {
 
                 }

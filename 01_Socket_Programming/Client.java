@@ -47,7 +47,55 @@ class Client {
             // TODO: handle exception
             System.out.println(e.getMessage());
         }
+    }
 
+    static boolean sendLogoutRequest(ObjectOutputStream out, ObjectInputStream in, String clientName) {
+        ServerMessage serverMessage;
+        try {
+            ClientMessage clientMessage = new ClientMessage(CLIENT_PACKET_TYPE.LOGOUT_REQUEST, clientName);
+            out.writeObject(clientMessage);
+            serverMessage = (ServerMessage) in.readObject();
+            if (serverMessage.server_PACKET_TYPE == SERVER_PACKET_TYPE.LOGOUT_RESPONSE) {
+                if (serverMessage.getMessage().equalsIgnoreCase("Success")) {
+                    return true;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    static boolean sendFileRequest(ObjectOutputStream out, ObjectInputStream in, String clientName,
+            String description) {
+        ClientMessage clientMessage = new ClientMessage(CLIENT_PACKET_TYPE.FILE_REQUEST, clientName);
+        clientMessage.putMessage(description);
+
+        try {
+            out.writeObject(clientMessage);
+
+            ServerMessage serverMessage = (ServerMessage) in.readObject();
+
+            if (serverMessage.server_PACKET_TYPE == SERVER_PACKET_TYPE.IMMEDIATE_FILE_REQUEST_RESPONSE) {
+                if (serverMessage.getMessage().equalsIgnoreCase("Success")) {
+
+                    return true;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            return false;
+        }
     }
 
     public static void main(String[] args) throws IOException, ClassNotFoundException {
@@ -116,15 +164,13 @@ class Client {
                 } else if (commandIndex == 1) {// files
                     listItemsFromServer(CLIENT_PACKET_TYPE.ALL_FILE_LIST_REQUEST, clientName, out, in);
                 } else if (commandIndex == 2) {// logout
-                    ClientMessage clientMessage = new ClientMessage(CLIENT_PACKET_TYPE.LOGOUT_REQUEST, clientName);
-                    out.writeObject(clientMessage);
-                    ServerMessage serverMessage = (ServerMessage) in.readObject();
-                    if (serverMessage.server_PACKET_TYPE == SERVER_PACKET_TYPE.LOGOUT_RESPONSE) {
-                        if (serverMessage.getMessage().equalsIgnoreCase("Success")) {
-                            System.out.println("Logged out successfully");
-                            loginComplete = false;
-                            break;
-                        }
+                    // if (logou)
+                    if (sendLogoutRequest(out, in, clientName)) {
+                        System.out.println("Logout successful");
+                        loginComplete = false;
+                        break;
+                    } else {
+                        System.out.println("Logout failed, please try again.");
                     }
                 } else if (commandIndex == 3) {// ls
                     listItemsFromServer(CLIENT_PACKET_TYPE.FILE_LIST_REQUEST, clientName, out, in);
@@ -137,20 +183,13 @@ class Client {
                         description = scanner.nextLine();
                     }
 
-                    ClientMessage clientMessage = new ClientMessage(CLIENT_PACKET_TYPE.FILE_REQUEST, clientName);
-                    clientMessage.putMessage(description);
+                    if (sendFileRequest(out, in, clientName, description)) {
+                        System.out.println("Your request was broadcast to all other users successfully");
+                    } else {
+                        System.out.println("Your request could not be processed, please try again");
 
-                    out.writeObject(clientMessage);
-
-                    ServerMessage serverMessage = (ServerMessage) in.readObject();
-
-                    if (serverMessage.server_PACKET_TYPE == SERVER_PACKET_TYPE.IMMEDIATE_FILE_REQUEST_RESPONSE) {
-                        if (serverMessage.getMessage().equalsIgnoreCase("Success")) {
-                            System.out.println("Your request was broadcast to all other users successfully");
-                        } else {
-                            System.out.println("Your request could not be processed: " + serverMessage.getMessage());
-                        }
                     }
+
                 } else if (commandIndex == 6) {// upload
 
                 } else if (commandIndex == 7) {// users

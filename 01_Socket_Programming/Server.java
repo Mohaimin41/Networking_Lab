@@ -15,15 +15,7 @@ import java.util.Hashtable;
 import java.util.Scanner;
 import java.util.Set;
 
-class ServerData {
-    /** the text file holding all clients */
-    private String clientListFile = "all_clients.txt";
-    /** Maximum file chunk size in bytes */
-    private int MAX_CHUNK_SIZE = 1000;
-    /** Minimum file chunk size in bytes */
-    private int MIN_CHUNK_SIZE = 100;
-    /** Maximum file buffer size used in Server */
-    private int MAX_BUFFER_SIZE = 50000000;
+class SharedServerData {
     /** Set of all clients names */
     Set<String> allClients = new HashSet<String>();
     /** Set of all active clients names */
@@ -35,8 +27,8 @@ class ServerData {
     File exceptionLog;
     /** BufferedWriter to exception log file */
     BufferedWriter errorWriter;
-    /** HashTable mapping clientName to Set of client's fileIDs */
-    Hashtable<String, Set<String>> clientToFileIDMap = new Hashtable<String, Set<String>>();
+    /** HashTable mapping clientName to Hashtable of clients file */
+    Hashtable<String, Hashtable<String, FileInfo>> clientToFileIDMap = new Hashtable<String, Hashtable<String, FileInfo>>();
 
 }
 
@@ -131,6 +123,12 @@ class Server {
             e.printStackTrace();
             return;
         }
+        SharedServerData sharedServerData = new SharedServerData();
+        sharedServerData.activeClients = activeClients;
+        sharedServerData.allClients = allClients;
+        sharedServerData.errorWriter = errorWriter;
+        sharedServerData.exceptionLog = exceptionLog;
+        sharedServerData.mainFtpDir = mainFtpDir;
 
         try (
                 ServerSocket welcomeSocket = new ServerSocket(6666);
@@ -157,8 +155,12 @@ class Server {
                             addToClientList(clientListFile, clientMessage.getClientName());
                         }
                         // open thread
-                        Thread worker = new Worker(socket, activeClients, allClients, exceptionLog,
-                                clientMessage.getClientName(), mainFtpDir);
+                        // Thread worker = new Worker(socket, activeClients, allClients, exceptionLog,
+                        // clientMessage.getClientName(), mainFtpDir);
+                        
+                        sharedServerData.clientToFileIDMap.put(clientMessage.getClientName(),
+                                new Hashtable<String, FileInfo>());
+                        Thread worker = new Worker(sharedServerData, clientMessage.getClientName(), socket, in, out);
                         worker.start();
 
                     } else {
