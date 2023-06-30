@@ -49,6 +49,15 @@ class Client {
         }
     }
 
+    /**
+     * sends logout request and recieves server reply
+     * 
+     * @param out        ObjectOutputStream to server
+     * @param in         ObjectInputStream from server
+     * @param clientName the String client name for this client
+     * @return true if logout response is successful, false otherwise or in any
+     *         exception
+     */
     static boolean sendLogoutRequest(ObjectOutputStream out, ObjectInputStream in, String clientName) {
         ServerMessage serverMessage;
         try {
@@ -71,6 +80,16 @@ class Client {
         }
     }
 
+    /**
+     * send a file request and recieves server response
+     * 
+     * @param out         ObjectOutputStream to server
+     * @param in          ObjectInputStream from server
+     * @param clientName  the String client name for this client
+     * @param description short String description of requested file
+     * @return true if Server successfully broadcast request, false otherwise or in
+     *         any exception
+     */
     static boolean sendFileRequest(ObjectOutputStream out, ObjectInputStream in, String clientName,
             String description) {
         ClientMessage clientMessage = new ClientMessage(CLIENT_PACKET_TYPE.FILE_REQUEST, clientName);

@@ -174,6 +174,9 @@ class Worker extends Thread {
         try {
             out.writeObject(serverMessage);
             activeClientList.remove(clientName);
+            // TODO: vejal ase
+            out.close();
+            in.close();
             socket.close();
         } catch (Exception e) {
             addToErrors(e);
@@ -226,8 +229,13 @@ class Worker extends Thread {
     }
 
     /**
-     * @param serverData the SharedServerData object holding relevant data objects
-     * @param clientName String name of client this thread will be associated to
+     * class extending Thread
+     * 
+     * @param serverData SharedServerData object holding common items
+     * @param clientName String clientName for this thread
+     * @param socket     Socket for client
+     * @param in         ObjectInputStream for client Socket
+     * @param out        ObjectOutputStream for client Socket
      */
     public Worker(SharedServerData serverData, String clientName, Socket socket, ObjectInputStream in,
             ObjectOutputStream out) {
@@ -250,10 +258,6 @@ class Worker extends Thread {
         }
 
         try {
-            // buffers
-
-            // ObjectOutputStream out = new ObjectOutputStream( socket.getOutputStream());
-            // ObjectInputStream in = new ObjectInputStream( socket.getInputStream());
 
             while (true) {
                 ClientMessage clientMessage = (ClientMessage) in.readObject();

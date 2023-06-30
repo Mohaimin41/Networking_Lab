@@ -30,6 +30,23 @@ class SharedServerData {
     /** HashTable mapping clientName to Hashtable of clients file */
     Hashtable<String, Hashtable<String, FileInfo>> clientToFileIDMap = new Hashtable<String, Hashtable<String, FileInfo>>();
 
+    /**
+     * Object holding common server data items
+     * 
+     * @param allClients    Set of String names of all clients
+     * @param activeClients Set of String names of all active client names
+     * @param mainFtpDir    File object of parent directory for all client director
+     * @param exceptionLog  File to log all exception stack traces
+     * @param errorWriter   Writer to exceptionLog file
+     */
+    public SharedServerData(Set<String> allClients, Set<String> activeClients, File mainFtpDir, File exceptionLog,
+            BufferedWriter errorWriter) {
+        this.allClients = allClients;
+        this.activeClients = activeClients;
+        this.mainFtpDir = mainFtpDir;
+        this.exceptionLog = exceptionLog;
+        this.errorWriter = errorWriter;
+    }
 }
 
 class Server {
@@ -52,6 +69,8 @@ class Server {
     static File exceptionLog;
     /** BufferedWriter to exception log file */
     static BufferedWriter errorWriter;
+    /** SharedServerData objecto holding common server objects */
+    static SharedServerData sharedServerData;
 
     /**
      * @param fileName the file listing all clients
@@ -110,25 +129,78 @@ class Server {
 
     }
 
-    public static void main(String[] args) throws IOException, ClassNotFoundException {
-        loadClientNames("all_clients.txt");
+    /**
+     * recieves and responses to client Login request
+     * 
+     * @param clientMessage first ClientMessage from client
+     * @param out           ObjectOutputStream to client Socket
+     * @param in            ObjectInputStream to client Socket
+     * @param socket        Socket to client
+     * @return true if successful login conditions met, false otherwise or in any
+     *         exception
+     */
+    static boolean handleLoginRequest(ClientMessage clientMessage, ObjectOutputStream out, ObjectInputStream in,
+            Socket socket) {
 
+        if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.LOGIN_REQUEST) {
+            ServerMessage serverMessage = new ServerMessage(SERVER_PACKET_TYPE.LOGIN_RESPONSE);
+
+            try {
+                if (!activeClients.contains(clientMessage.getClientName())) {
+                    serverMessage.putMessage("Success");
+                    out.writeObject(serverMessage);
+
+                    activeClients.add(clientMessage.getClientName());
+                    if (!allClients.contains(clientMessage.getClientName())) {
+                        addToClientList(clientListFile, clientMessage.getClientName());
+                    }
+
+                    sharedServerData.clientToFileIDMap.put(clientMessage.getClientName(),
+                            new Hashtable<String, FileInfo>());
+                    return true;
+                } else {
+                    serverMessage.putMessage("A client already logged in with the name: "
+                            + clientMessage.getClientName() + ". Closing connection");
+                    out.writeObject(serverMessage);
+                    return false;
+                }
+            } catch (IOException e) {
+                addToErrors(e);
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * makes the initial parent directory for all client directory(if not present
+     * already) and creates the log file for all exceptions
+     * 
+     * @return true if successful, false otherwise
+     */
+    static boolean makeInitDirectory() {
         exceptionLog = new File("error_log.txt");
         mainFtpDir = new File("ftpDir");
         try {
             exceptionLog.createNewFile();
             mainFtpDir.mkdirs();
+            return true;
         } catch (Exception e) {
-            System.out.println("error in making necessary files and directories");
+            System.out.println("error in making necessary files and directories, aborting");
             e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static void main(String[] args) throws IOException, ClassNotFoundException {
+        loadClientNames("all_clients.txt");
+
+        if (!makeInitDirectory()) {
             return;
         }
-        SharedServerData sharedServerData = new SharedServerData();
-        sharedServerData.activeClients = activeClients;
-        sharedServerData.allClients = allClients;
-        sharedServerData.errorWriter = errorWriter;
-        sharedServerData.exceptionLog = exceptionLog;
-        sharedServerData.mainFtpDir = mainFtpDir;
+
+        sharedServerData = new SharedServerData(allClients, activeClients, mainFtpDir, exceptionLog, errorWriter);
 
         try (
                 ServerSocket welcomeSocket = new ServerSocket(6666);
@@ -143,33 +215,13 @@ class Server {
 
                 ClientMessage clientMessage = (ClientMessage) in.readObject();
 
-                if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.LOGIN_REQUEST) {
-                    ServerMessage serverMessage = new ServerMessage(SERVER_PACKET_TYPE.LOGIN_RESPONSE);
+                boolean loginState = handleLoginRequest(clientMessage, out, in, socket);
+                if (loginState) {
 
-                    if (!activeClients.contains(clientMessage.getClientName())) {
-                        serverMessage.putMessage("Success");
-                        out.writeObject(serverMessage);
-
-                        activeClients.add(clientMessage.getClientName());
-                        if (!allClients.contains(clientMessage.getClientName())) {
-                            addToClientList(clientListFile, clientMessage.getClientName());
-                        }
-                        // open thread
-                        // Thread worker = new Worker(socket, activeClients, allClients, exceptionLog,
-                        // clientMessage.getClientName(), mainFtpDir);
-                        
-                        sharedServerData.clientToFileIDMap.put(clientMessage.getClientName(),
-                                new Hashtable<String, FileInfo>());
-                        Thread worker = new Worker(sharedServerData, clientMessage.getClientName(), socket, in, out);
-                        worker.start();
-
-                    } else {
-                        serverMessage.putMessage("A client already logged in with the name: "
-                                + clientMessage.getClientName() + ". Closing connection");
-                        out.writeObject(serverMessage);
-                        socket.close();
-                        ;
-                    }
+                    Thread worker = new Worker(sharedServerData, clientMessage.getClientName(), socket, in, out);
+                    worker.start();
+                } else {
+                    socket.close();
                 }
 
             }
