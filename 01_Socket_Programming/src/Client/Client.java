@@ -1,9 +1,15 @@
+package src.Client;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.Scanner;
+
+import src.Server.CLIENT_PACKET_TYPE;
+import src.Server.ClientMessage;
+import src.Server.SERVER_PACKET_TYPE;
+import src.Server.ServerMessage;
 
 class Client {
     /**
@@ -33,7 +39,7 @@ class Client {
 
             if (client_PACKET_TYPE == CLIENT_PACKET_TYPE.CLIENT_LIST_REQUEST
                     && serverMessage.server_PACKET_TYPE == SERVER_PACKET_TYPE.CLIENT_LIST) {
-                System.out.println("All clients:\n" + serverMessage.getMessage());
+                System.out.println(serverMessage.getMessage());
             } else if (client_PACKET_TYPE == CLIENT_PACKET_TYPE.FILE_LIST_REQUEST
                     && serverMessage.server_PACKET_TYPE == SERVER_PACKET_TYPE.FILE_LIST) {
                 System.out.println("Your files stored in server:\n" + serverMessage.getMessage());

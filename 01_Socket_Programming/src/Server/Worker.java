@@ -1,3 +1,4 @@
+package src.Server;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -40,7 +41,7 @@ class Worker extends Thread {
     /** the Set of all client names */
     Set<String> allClientList;
     /** HashTable of String fileID and FileInfo objects for clients file */
-    Hashtable<String, FileInfo> fileTable;
+    // Hashtable<String, FileInfo> fileTable;
     /** HashTable mapping clientName to Hashtable of clients files */
     Hashtable<String, Hashtable<String, FileInfo>> clientToFileIDMap = new Hashtable<String, Hashtable<String, FileInfo>>();
 
@@ -50,7 +51,7 @@ class Worker extends Thread {
     void addToErrors(Exception e) {
         try {
             BufferedWriter errorWriter = new BufferedWriter(new FileWriter(exceptionLog, true));
-            errorWriter.append(e.getMessage());
+            errorWriter.append("This client's worker had error: " + clientName + " \n" + e.getMessage());
             errorWriter.newLine();
             for (StackTraceElement s : e.getStackTrace()) {
                 errorWriter.append(s.toString());
@@ -73,14 +74,17 @@ class Worker extends Thread {
     int makeClientDirectory() {
         int status = 0;
         try {
-            File[] allDirectories = mainFtpDir.listFiles();
+            // File[] allDirectories = mainFtpDir.listFiles();
 
-            for (File file : allDirectories) {
-                if (file.getName().equalsIgnoreCase(clientName)) {
-                    return -1;
-                }
-            }
+            // for (File file : allDirectories) {
+            // if (file.getName().equalsIgnoreCase(clientName)) {
+            // return -1;
+            // }
+            // }
             clientDirectory = new File(mainFtpDir, clientName);
+            if (clientDirectory.exists()) {
+                return -1;
+            }
             clientDirectory.mkdirs();
             status = 0;
         } catch (Exception e) {
@@ -100,10 +104,16 @@ class Worker extends Thread {
      */
     void sendClientFileList(ObjectOutputStream out) {
         String clientFileList = "FILEID \t\t FILE \t\t PRIVACY\n";
-        for (String fileID : fileTable.keySet()) {
-            clientFileList += fileID + " \t\t " + fileTable.get(fileID).file.getName() + " \t\t "
-                    + ((fileTable.get(fileID).isPrivate) ? "Private" : "Public\n");
+        Hashtable<String, FileInfo> tempHashtable = clientToFileIDMap.get(clientName);
+        if (tempHashtable.isEmpty()) {
+            clientFileList = "(empty)\n";
+        } else {
+            for (String fileID : tempHashtable.keySet()) {
+                clientFileList += fileID + " \t\t " + tempHashtable.get(fileID).file.getName() + " \t\t "
+                        + ((tempHashtable.get(fileID).isPrivate) ? "Private\n" : "Public\n");
+            }
         }
+
         ServerMessage serverMessage = new ServerMessage(SERVER_PACKET_TYPE.FILE_LIST);
         serverMessage.putMessage(clientFileList);
         try {
@@ -123,11 +133,14 @@ class Worker extends Thread {
 
         for (String clientName : clientToFileIDMap.keySet()) {
             message += "USER: " + clientName + "\nFILEID \t\t FILE \t\t PRIVACY\n";
-
-            for (String fileId : clientToFileIDMap.get(clientName).keySet()) {
-                if (!(clientToFileIDMap.get(clientName).get(fileId).isPrivate)) {
-                    message += fileId + " \t\t " + clientToFileIDMap.get(clientName).get(fileId).file.getName()
-                            + " \t\t Public\n";
+            if (clientToFileIDMap.get(clientName).isEmpty()) {
+                message += "(empty)\n";
+            } else {
+                for (String fileId : clientToFileIDMap.get(clientName).keySet()) {
+                    if (!(clientToFileIDMap.get(clientName).get(fileId).isPrivate)) {
+                        message += fileId + " \t\t " + clientToFileIDMap.get(clientName).get(fileId).file.getName()
+                                + " \t\t Public\n";
+                    }
                 }
             }
         }
@@ -210,25 +223,6 @@ class Worker extends Thread {
     }
 
     /**
-     * @param socket           the Socket to client
-     * @param activeClientList the active client name Set
-     * @param allClientList    the Set of all client names
-     * @param exceptionLog     the File to log Exceptions
-     * @param clientName       String clientName to be associated with this Worker
-     * @param mainFtpDir       main ftp directory
-     */
-    public Worker(Socket socket, Set<String> activeClientList, Set<String> allClientList, File exceptionLog,
-            String clientName, File mainFtpDir) {
-        this.socket = socket;
-        this.exceptionLog = exceptionLog;
-        this.clientName = clientName;
-        this.activeClientList = activeClientList;
-        this.allClientList = allClientList;
-        this.mainFtpDir = mainFtpDir;
-        this.fileTable = new Hashtable<String, FileInfo>();
-    }
-
-    /**
      * class extending Thread
      * 
      * @param serverData SharedServerData object holding common items
@@ -245,10 +239,12 @@ class Worker extends Thread {
         this.activeClientList = serverData.activeClients;
         this.allClientList = serverData.allClients;
         this.mainFtpDir = serverData.mainFtpDir;
-        this.fileTable = new Hashtable<String, FileInfo>();
+        // this.fileTable = new Hashtable<String, FileInfo>();
         this.clientToFileIDMap = serverData.clientToFileIDMap;
+
         this.out = out;
         this.in = in;
+
     }
 
     public void run() {
@@ -277,10 +273,13 @@ class Worker extends Thread {
                     }
                 } else if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.UPLOAD_INITATE_REQUEST) {
 
+                } else if (clientMessage.client_PACKET_TYPE == CLIENT_PACKET_TYPE.DOWNLOAD_REQUEST) {
+
                 }
             }
         } catch (Exception e) {
             addToErrors(e);
+            activeClientList.remove(this.clientName);
         }
     }
 }
