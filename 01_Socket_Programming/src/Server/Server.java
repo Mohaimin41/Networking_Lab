@@ -12,7 +12,6 @@ import java.io.ObjectOutputStream;
 import java.io.Reader;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Scanner;
@@ -59,7 +58,7 @@ public class Server {
                 allClients.add(clientName);
             }
         } catch (IOException e) {
-            System.out.println(e);
+            addToErrors(e);
         }
     }
 
@@ -275,9 +274,7 @@ public class Server {
 
                 boolean loginState = handleLoginRequest(clientMessage, out, in, socket);
                 if (loginState) {
-                    if (sharedServerData.clientToFileIDMap.get("beta").isEmpty()) {
-                        System.out.println("empty @Server:278");
-                    }
+                    
                     Thread worker = new Worker(sharedServerData, clientMessage.getClientName(), socket, in, out);
                     worker.start();
                 } else {
