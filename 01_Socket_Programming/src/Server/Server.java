@@ -163,39 +163,43 @@ public class Server {
      */
     static Hashtable<String, Hashtable<String, FileInfo>> makeFileTreeFromStore() {
         File clientToFileMap = new File("client_to_file_map.txt");
-        Hashtable<String, Hashtable<String, FileInfo>> clientToFileListMap = new Hashtable<String, Hashtable<String, FileInfo>>();
-        Set<String> processedUser = new HashSet<String>();
+        if (clientToFileMap.exists()) {
+            Hashtable<String, Hashtable<String, FileInfo>> clientToFileListMap = new Hashtable<String, Hashtable<String, FileInfo>>();
+            Set<String> processedUser = new HashSet<String>();
 
-        try (Reader reader = new InputStreamReader(new FileInputStream(clientToFileMap), "UTF-8")) {
-            BufferedReader br = new BufferedReader(reader);
+            try (Reader reader = new InputStreamReader(new FileInputStream(clientToFileMap), "UTF-8")) {
+                BufferedReader br = new BufferedReader(reader);
 
-            String line;
-            while (true) {
-                line = br.readLine();
-                if (line == null) {
-                    break;
-                }
-
-                String[] fileData = line.split(":");
-                String client = fileData[0], fileID = fileData[1], fileName = fileData[3];
-
-                boolean privacy = (fileData[2].equalsIgnoreCase("true") ? true : false);
-
-                File tempFile = new File(mainFtpDir.getName() + "\\" + client + "\\" + fileName);
-
-                if (tempFile.exists()) {
-                    if (!processedUser.contains(client)) {
-                        processedUser.add(client);
-                        clientToFileListMap.put(client, new Hashtable<String, FileInfo>());
+                String line;
+                while (true) {
+                    line = br.readLine();
+                    if (line == null) {
+                        break;
                     }
-                    
-                    clientToFileListMap.get(client).put(fileID, new FileInfo(privacy, tempFile));
+
+                    String[] fileData = line.split(":");
+                    String client = fileData[0], fileID = fileData[1], fileName = fileData[3];
+
+                    boolean privacy = (fileData[2].equalsIgnoreCase("true") ? true : false);
+
+                    File tempFile = new File(mainFtpDir.getName() + "\\" + client + "\\" + fileName);
+
+                    if (tempFile.exists()) {
+                        if (!processedUser.contains(client)) {
+                            processedUser.add(client);
+                            clientToFileListMap.put(client, new Hashtable<String, FileInfo>());
+                        }
+
+                        clientToFileListMap.get(client).put(fileID, new FileInfo(privacy, tempFile));
+                    }
                 }
+                return clientToFileListMap;
+            } catch (IOException e) {
+                addToErrors(e);
+                ;
+                return null;
             }
-            return clientToFileListMap;
-        } catch (IOException e) {
-            addToErrors(e);
-            ;
+        } else {
             return null;
         }
     }
@@ -274,7 +278,7 @@ public class Server {
 
                 boolean loginState = handleLoginRequest(clientMessage, out, in, socket);
                 if (loginState) {
-                    
+
                     Thread worker = new Worker(sharedServerData, clientMessage.getClientName(), socket, in, out);
                     worker.start();
                 } else {
