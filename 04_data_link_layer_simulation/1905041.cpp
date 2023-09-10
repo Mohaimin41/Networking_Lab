@@ -109,6 +109,40 @@ std::vector<int> *fill_hammingcode(std::vector<int> *block)
     return block;
 }
 
+std::vector<int> *correct_by_hammingcode(std::vector<int> *block)
+{
+    int errored_bit = 0;
+    for (int i = 1; i <= (int)block->size(); i++)
+    {
+        if (!(i & (i - 1))) // i is power of 2
+        {
+            int counter = 0;
+            for (int j = 1; j <= (int)block->size(); j++)
+            {
+                // if j-th bit(int at vector) set
+                // and j is a position checked by i-th bit(int at vector)
+                if (block->at(j - 1) && (j & (1 << mylog2(i))))
+                    counter++;
+            }
+            if (counter & 1) // odd parity found for i-th position correcting bit
+                errored_bit += i;
+        }
+    }
+    if (errored_bit)
+        block->at(errored_bit - 1) = !(block->at(errored_bit - 1));
+    std::vector<int> t;
+
+    for (int i = 1; i <= block->size(); i++)
+    {
+        if ((i & (i - 1))) // not a power of 2
+        {
+            t.push_back(block->at(i-1));
+        }
+    }
+    block->swap(t);
+    return block;
+}
+
 std::vector<int> *ascii_to_bin(char c)
 {
     std::vector<int> *r = new std::vector<int>();
@@ -292,7 +326,7 @@ std::vector<int> *simulate(std::vector<int> *frame, double p)
     std::mt19937 mt(std::chrono::steady_clock::now().time_since_epoch().count());
     std::uniform_real_distribution<> gen(0, 1);
     std::vector<int> *t = new std::vector<int>();
-    for (int i = 0; i < frame->size(); i++)
+    for (int i = 0; i < (int)frame->size(); i++)
     {
         if (gen(mt) < p)
         {
@@ -322,6 +356,59 @@ bool has_crc_error(std::vector<int> *frame, std::string g)
         return false;
     else
         return true;
+}
+
+std::vector<std::vector<int> *> *deserialize_frame(std::vector<int> *frame, struct input_data *d)
+{
+    std::vector<std::vector<int> *> *t = new std::vector<std::vector<int> *>();
+    for (int i = 0; i < (int)d->g.length() - 1; i++)
+        frame->pop_back();
+
+    int r = frame->size() / (8 * d->m + mylog2(8 * d->m) + 1);
+
+    for (int i = 0; i < r; i++)
+        t->push_back(new std::vector<int>());
+
+    for (int i = 0; i < (int)frame->size(); i++)
+        t->at(i % r)->push_back(frame->at(i));
+
+    return t;
+}
+
+void show_recieved_block(std::vector<std::vector<int> *> *block, std::vector<int> *toggled_list)
+{
+    int r = 1;
+    for (auto b : *block)
+    {
+        int c = 1;
+        for (auto v : *b)
+        {
+
+            if (std::find(
+                    toggled_list->begin(), toggled_list->end(),
+                    ((c - 1) * block->size() + r - 1)) != toggled_list->end())
+            {
+                HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+                SetConsoleTextAttribute(hConsole, FOREGROUND_RED);
+                std::cout << v;
+                SetConsoleTextAttribute(hConsole, 7);
+            }
+            else
+            {
+                std::cout << v;
+            }
+            c++;
+        }
+        r++;
+        std::cout << "\n";
+    }
+}
+
+std::vector<std::vector<int> *> *apply_hammingcode(std::vector<std::vector<int> *> *block)
+{
+    for (auto b : *block)
+        b = correct_by_hammingcode(b);
+    return block;
 }
 
 void run()
@@ -354,6 +441,13 @@ void run()
     {
         std::cout << "error detected\n";
     }
+    // step 8
+    block = deserialize_frame(serialized, d);
+    show_recieved_block(block, toggled_list);
+    // step 9
+    block = apply_hammingcode(block);
+    show_ascii_block(block, false);
+
     std::cout << "end\n";
     delete serialized;
     for (auto b : *block)
