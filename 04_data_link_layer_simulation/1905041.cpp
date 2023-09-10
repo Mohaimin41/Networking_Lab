@@ -256,11 +256,11 @@ std::vector<int> *add_crc_checksum(std::vector<int> *block, std::string g)
     }
 
     // rem = ( x^r * M(x) ) % g(x)
-    std::vector<int> *checksum = get_crc_rem(dividend, g);
+    std::vector<int> *rem = get_crc_rem(dividend, g);
 
     // c(x) = M(x) * x^r + rem
-    for (int i = 0; i < (int)checksum->size(); i++)
-        block->push_back(checksum->at(i));
+    for (int i = 0; i < (int)rem->size(); i++)
+        block->push_back(rem->at(i));
 
     delete dividend;
     return block;
@@ -286,20 +286,42 @@ void show_frame_colored(std::vector<int> *frame, std::vector<int> *toggled)
     std::cout << "\n";
 }
 
-std::vector<int> *simulate(int frame_size, double p)
+std::vector<int> *simulate(std::vector<int> *frame, double p)
 {
     // std::default_random_engine re(std::chrono::steady_clock::now().time_since_epoch().count());
     std::mt19937 mt(std::chrono::steady_clock::now().time_since_epoch().count());
     std::uniform_real_distribution<> gen(0, 1);
     std::vector<int> *t = new std::vector<int>();
-    for (int i = 0; i < frame_size; i++)
+    for (int i = 0; i < frame->size(); i++)
     {
         if (gen(mt) < p)
         {
             t->push_back(i);
+            frame->at(i) = !(frame->at(i));
         }
     }
     return t;
+}
+
+bool has_crc_error(std::vector<int> *frame, std::string g)
+{
+    std::vector<int> *dividend = new std::vector<int>(*frame);
+
+    while (!(dividend->at(0)))
+    {
+        dividend->erase(dividend->begin() + 0);
+    }
+
+    std::vector<int> *rem = get_crc_rem(dividend, g);
+
+    int r = num_size(rem);
+    delete rem;
+    delete dividend;
+
+    if (r)
+        return false;
+    else
+        return true;
 }
 
 void run()
@@ -320,9 +342,18 @@ void run()
     serialized = add_crc_checksum(serialized, d->g);
     show_serialized_block(serialized, d->g.length() - 1);
     // step 6
-    std::vector<int> *toggled_list = simulate((int)serialized->size(), d->p);
+    std::vector<int> *toggled_list = simulate(serialized, d->p);
     show_frame_colored(serialized, toggled_list);
-
+    // step 7
+    std::cout << "result of CRC checksum matching: ";
+    if (has_crc_error(serialized, d->g))
+    {
+        std::cout << "no error detected\n";
+    }
+    else
+    {
+        std::cout << "error detected\n";
+    }
     std::cout << "end\n";
     delete serialized;
     for (auto b : *block)

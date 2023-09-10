@@ -28,8 +28,8 @@ std::vector<int>*                   serialize_block(std::vector<std::vector<int>
 void                                show_serialized_block(std::vector<int>*, int);
 std::vector<int>*                   add_crc_checksum(std::vector<int>*, std::string);
 void                                show_frame_colored(std::vector<int>*, std::vector<int>*);
-std::vector<int>*                   simulate(int, double);
-bool                                check_crc_checksum(std::vector<int>*);
+std::vector<int>*                   simulate(std::vector<int>*, double);
+bool                                has_crc_error(std::vector<int>*, std::string);
 std::vector<std::vector<int>*>*     deserialize_frame(std::vector<int>*);
 void                                show_recieved_block(std::vector<int>*, std::vector<int>*);
 std::vector<std::vector<int>*>*     apply_hammingcode(std::vector<std::vector<int>*>*);
