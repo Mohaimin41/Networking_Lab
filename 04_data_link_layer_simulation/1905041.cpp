@@ -437,7 +437,7 @@ std::vector<std::vector<int> *> *apply_hammingcode(std::vector<std::vector<int> 
         b = correct_by_hammingcode(b);
     return block;
 }
-
+// recreate string from vector of vector
 std::string mk_string(std::vector<std::vector<int> *> *block)
 {
     std::string s;
@@ -457,9 +457,7 @@ std::string mk_string(std::vector<std::vector<int> *> *block)
             }
             s.push_back(ch);
         }
-        std::cout << "\n";
     }
-
     return s;
 }
 
