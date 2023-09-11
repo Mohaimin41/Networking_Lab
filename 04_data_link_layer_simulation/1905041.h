@@ -1,10 +1,10 @@
-#include <iostream>
 #include <vector>
 #include <string>
-// #include <windows.h>
 
 #ifndef LINK_LAYER
 #define LINK_LAYER
+
+#define BYTE_SIZE 8
 
 struct input_data
 {
@@ -14,9 +14,15 @@ struct input_data
     std::string g;
 };
 
+enum step {
+    AFTER_HAMMING_ADD,
+    AFTER_BLOCK_MAKING,
+    AFTER_REMOVING_HAMMING
+};
+
 struct input_data*                  input();
 std::vector<std::vector<int>*>*     mk_ascii_block(struct input_data*);
-void                                show_ascii_block(std::vector<std::vector<int>*>*, bool);
+void                                show_ascii_block(std::vector<std::vector<int>*>*, step);
 std::vector<std::vector<int>*>*     add_hammingcode(std::vector<std::vector<int>*>*);
 std::vector<int>*                   serialize_block(std::vector<std::vector<int>*>*);
 void                                show_serialized_block(std::vector<int>*, int);

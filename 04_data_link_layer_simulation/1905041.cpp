@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <random>
 #include <windows.h>
+
 #include "1905041.h"
 
 inline void print_vector(std::vector<int> *num)
@@ -11,6 +13,7 @@ inline void print_vector(std::vector<int> *num)
     std::cout << "\n";
 }
 
+// integer 2 based log
 inline unsigned int mylog2(unsigned int v)
 {
     unsigned int r = 0;
@@ -21,6 +24,7 @@ inline unsigned int mylog2(unsigned int v)
     return r;
 }
 
+// absolute size of number in bits
 unsigned int num_size(std::vector<int> *num)
 {
     unsigned int c = 0;
@@ -31,6 +35,7 @@ unsigned int num_size(std::vector<int> *num)
     return (num->size() - c);
 }
 
+// position of leftmost 1 in number padded with 0
 unsigned int first_set_at(std::vector<int> *num)
 {
     unsigned int c = 0;
@@ -40,36 +45,32 @@ unsigned int first_set_at(std::vector<int> *num)
     return c;
 }
 
+// divide(continuos xor subtraction) dividend by generator g
 std::vector<int> *get_crc_rem(std::vector<int> *dividend, std::string g)
 {
     std::vector<int> *rem = new std::vector<int>(*dividend);
     std::vector<int> *divisor = new std::vector<int>();
-
+    // making divisor from g
     for (int i = 0; i < (int)g.length(); i++)
         divisor->push_back(g[i] - '0');
 
     for (int i = 0; i < (int)(dividend->size() - g.length()); i++)
         divisor->push_back(0);
-
+    // division loop
     while (num_size(divisor) >= g.length())
     {
-        for (int i = 0; i < (int)rem->size(); i++)
+        for (int i = 0; i < (int)rem->size(); i++) // subtract
             rem->at(i) ^= divisor->at(i);
-
+        // right shift divisor to shift_amount
         int shift_amount = first_set_at(rem) - first_set_at(divisor);
-        if (shift_amount < 0)
-        {
-            std::cout << "rem f: " << first_set_at(rem) << ", divisor f: "
-                      << first_set_at(divisor) << ", rem, divisor: \n";
-            print_vector(rem);
-            print_vector(divisor);
-        }
+
         for (int i = divisor->size() - 1; i >= (int)shift_amount; i--)
             divisor->at(i) = divisor->at(i - shift_amount);
 
         for (int i = 0; i < (int)shift_amount; i++)
             divisor->at(i) = 0;
     }
+    // remove padding from in front of remainder
     std::reverse(rem->begin(), rem->end());
     for (int i = 0; i < (int)(divisor->size() - g.length() + 1); i++)
         rem->pop_back();
@@ -78,6 +79,7 @@ std::vector<int> *get_crc_rem(std::vector<int> *dividend, std::string g)
     return rem;
 }
 
+// insert hamming code positions in number
 std::vector<int> *mk_empty_hammedblock(std::vector<int> *block)
 {
     int new_size = block->size() + mylog2(block->size()) + 1;
@@ -89,6 +91,7 @@ std::vector<int> *mk_empty_hammedblock(std::vector<int> *block)
     return block;
 }
 
+// fill up hamming code with even parity
 std::vector<int> *fill_hammingcode(std::vector<int> *block)
 {
     for (int i = 1; i <= (int)block->size(); i++)
@@ -109,6 +112,8 @@ std::vector<int> *fill_hammingcode(std::vector<int> *block)
     return block;
 }
 
+// check each parity bit and toggle errored bit
+// corrects only if 1 bit error, i.e. flipped bit position < number size
 std::vector<int> *correct_by_hammingcode(std::vector<int> *block)
 {
     int errored_bit = 0;
@@ -128,26 +133,28 @@ std::vector<int> *correct_by_hammingcode(std::vector<int> *block)
                 errored_bit += i;
         }
     }
-    if (errored_bit)
+    if (errored_bit && errored_bit <= (int)block->size()) // toggle
         block->at(errored_bit - 1) = !(block->at(errored_bit - 1));
+    // remove check bits
     std::vector<int> t;
 
-    for (int i = 1; i <= block->size(); i++)
+    for (int i = 1; i <= (int)block->size(); i++)
     {
         if ((i & (i - 1))) // not a power of 2
         {
-            t.push_back(block->at(i-1));
+            t.push_back(block->at(i - 1));
         }
     }
     block->swap(t);
     return block;
 }
 
+// mk vector of int representing bits of ascii char
 std::vector<int> *ascii_to_bin(char c)
 {
     std::vector<int> *r = new std::vector<int>();
     int k = 1;
-    while (k < 1 << 8)
+    while (k < 1 << BYTE_SIZE)
     {
         r->push_back((c & k) ? 1 : 0);
         k <<= 1;
@@ -178,6 +185,8 @@ struct input_data *input()
     return res;
 }
 
+// make ascii char block, block is a vector of vector
+// each vector is one row of block
 std::vector<std::vector<int> *> *mk_ascii_block(struct input_data *d)
 {
     std::vector<std::vector<int> *> *t = new std::vector<std::vector<int> *>();
@@ -190,15 +199,17 @@ std::vector<std::vector<int> *> *mk_ascii_block(struct input_data *d)
             std::vector<int> *bin = ascii_to_bin(d->data[i]);
             for (int b : *bin)
                 t->at(idx)->push_back(b);
+            delete bin;
         }
     }
 
     return t;
 }
 
-void show_ascii_block(std::vector<std::vector<int> *> *block, bool is_hammed)
+// shows block, color if shown after hamming code added
+void show_ascii_block(std::vector<std::vector<int> *> *block, step s)
 {
-    if (is_hammed)
+    if (s == AFTER_HAMMING_ADD)
     {
         std::cout << "data block after adding check bits:\n";
         for (auto v : *block)
@@ -224,7 +235,10 @@ void show_ascii_block(std::vector<std::vector<int> *> *block, bool is_hammed)
     }
     else
     {
-        std::cout << "data block (ascii code of m characters per row):\n";
+        if (s == AFTER_BLOCK_MAKING)
+            std::cout << "data block (ascii code of m characters per row):\n";
+        else if (s == AFTER_REMOVING_HAMMING)
+            std::cout << "data block after removing check bits:\n";
         for (auto v : *block)
         {
             print_vector(v);
@@ -233,6 +247,7 @@ void show_ascii_block(std::vector<std::vector<int> *> *block, bool is_hammed)
     std::cout << "\n";
 }
 
+// take and add hamming code to each row of block
 std::vector<std::vector<int> *> *add_hammingcode(std::vector<std::vector<int> *> *block)
 {
     for (auto b : *block)
@@ -244,6 +259,7 @@ std::vector<std::vector<int> *> *add_hammingcode(std::vector<std::vector<int> *>
     return block;
 }
 
+// serialize block to single row
 std::vector<int> *serialize_block(std::vector<std::vector<int> *> *block)
 {
     std::vector<int> *t = new std::vector<int>();
@@ -258,6 +274,7 @@ std::vector<int> *serialize_block(std::vector<std::vector<int> *> *block)
     return t;
 }
 
+// shows a serialized frame, bits appended (from append_count) shown in cyan
 void show_serialized_block(std::vector<int> *serialized, int append_count)
 {
     if (append_count)
@@ -275,15 +292,17 @@ void show_serialized_block(std::vector<int> *serialized, int append_count)
 
     SetConsoleTextAttribute(hConsole, 7);
 
-    std::cout << '\n';
+    std::cout << "\n\n";
 }
 
-std::vector<int> *add_crc_checksum(std::vector<int> *block, std::string g)
+// appends crc checksum to serailized fram
+std::vector<int> *add_crc_checksum(std::vector<int> *frame, std::string g)
 {
-    std::vector<int> *dividend = new std::vector<int>(*block);
+    // multipy by generator's highest power
+    std::vector<int> *dividend = new std::vector<int>(*frame);
     for (int i = 0; i < (int)g.size() - 1; i++)
         dividend->push_back(0);
-
+    // remove leading 0
     while (!(dividend->at(0)))
     {
         dividend->erase(dividend->begin() + 0);
@@ -292,14 +311,15 @@ std::vector<int> *add_crc_checksum(std::vector<int> *block, std::string g)
     // rem = ( x^r * M(x) ) % g(x)
     std::vector<int> *rem = get_crc_rem(dividend, g);
 
-    // c(x) = M(x) * x^r + rem
+    // c(x) = x^r * M(x) + rem
     for (int i = 0; i < (int)rem->size(); i++)
-        block->push_back(rem->at(i));
-
+        frame->push_back(rem->at(i));
+    delete rem;
     delete dividend;
-    return block;
+    return frame; // c(x)
 }
 
+// shows bits in position from toggled_list in read
 void show_frame_colored(std::vector<int> *frame, std::vector<int> *toggled)
 {
     std::cout << "recieved frame:\n";
@@ -317,9 +337,11 @@ void show_frame_colored(std::vector<int> *frame, std::vector<int> *toggled)
             std::cout << frame->at(i);
         }
     }
-    std::cout << "\n";
+    std::cout << "\n\n";
 }
 
+// flips bits if random number in [0,1) is less then error probability threshold
+// returns indices in frame where bit was flipped
 std::vector<int> *simulate(std::vector<int> *frame, double p)
 {
     // std::default_random_engine re(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -337,6 +359,7 @@ std::vector<int> *simulate(std::vector<int> *frame, double p)
     return t;
 }
 
+// error free frame should have remainder of size 0
 bool has_crc_error(std::vector<int> *frame, std::string g)
 {
     std::vector<int> *dividend = new std::vector<int>(*frame);
@@ -358,13 +381,14 @@ bool has_crc_error(std::vector<int> *frame, std::string g)
         return true;
 }
 
+// make block (vector of vector) after removing checksum
 std::vector<std::vector<int> *> *deserialize_frame(std::vector<int> *frame, struct input_data *d)
 {
     std::vector<std::vector<int> *> *t = new std::vector<std::vector<int> *>();
-    for (int i = 0; i < (int)d->g.length() - 1; i++)
+    for (int i = 0; i < (int)d->g.length() - 1; i++) // checksum removed
         frame->pop_back();
-
-    int r = frame->size() / (8 * d->m + mylog2(8 * d->m) + 1);
+    // number of rows in a block
+    int r = frame->size() / (BYTE_SIZE * d->m + mylog2(BYTE_SIZE * d->m) + 1);
 
     for (int i = 0; i < r; i++)
         t->push_back(new std::vector<int>());
@@ -375,15 +399,17 @@ std::vector<std::vector<int> *> *deserialize_frame(std::vector<int> *frame, stru
     return t;
 }
 
+// shows block with flippedb bits in red
 void show_recieved_block(std::vector<std::vector<int> *> *block, std::vector<int> *toggled_list)
 {
+    std::cout << "data block after removing CRC checksum bits:\n";
     int r = 1;
     for (auto b : *block)
     {
         int c = 1;
         for (auto v : *b)
         {
-
+            // show in red if bit position in frame is in toggled bits list
             if (std::find(
                     toggled_list->begin(), toggled_list->end(),
                     ((c - 1) * block->size() + r - 1)) != toggled_list->end())
@@ -402,6 +428,7 @@ void show_recieved_block(std::vector<std::vector<int> *> *block, std::vector<int
         r++;
         std::cout << "\n";
     }
+    std::cout << '\n';
 }
 
 std::vector<std::vector<int> *> *apply_hammingcode(std::vector<std::vector<int> *> *block)
@@ -411,6 +438,31 @@ std::vector<std::vector<int> *> *apply_hammingcode(std::vector<std::vector<int> 
     return block;
 }
 
+std::string mk_string(std::vector<std::vector<int> *> *block)
+{
+    std::string s;
+
+    for (auto b : *block)
+    {
+        int total_char = b->size() / BYTE_SIZE;
+        // loop through 8 bits(int in vector) and make a char
+        for (int c = 0; c < total_char; c++)
+        {
+            unsigned char ch = 0;
+            for (int i = 0; i < BYTE_SIZE; i++)
+            {
+                ch |= (b->at(c * BYTE_SIZE + i)) ? 1 : 0;
+                if (i < BYTE_SIZE - 1)
+                    ch <<= 1;
+            }
+            s.push_back(ch);
+        }
+        std::cout << "\n";
+    }
+
+    return s;
+}
+
 void run()
 {
     // step 1
@@ -418,10 +470,10 @@ void run()
     std::cout << "\ndata string after padding: " << d->data << "\n\n";
     // step 2
     std::vector<std::vector<int> *> *block = mk_ascii_block(d);
-    show_ascii_block(block, false);
+    show_ascii_block(block, AFTER_BLOCK_MAKING);
     // step 3
     add_hammingcode(block);
-    show_ascii_block(block, true);
+    show_ascii_block(block, AFTER_HAMMING_ADD);
     // step 4
     std::vector<int> *serialized = serialize_block(block);
     show_serialized_block(serialized, 0);
@@ -435,20 +487,26 @@ void run()
     std::cout << "result of CRC checksum matching: ";
     if (has_crc_error(serialized, d->g))
     {
-        std::cout << "no error detected\n";
+        std::cout << "no error detected\n\n";
     }
     else
     {
-        std::cout << "error detected\n";
+        std::cout << "error detected\n\n";
     }
     // step 8
+    for (auto b : *block)
+        delete b;
+    delete block; // previous one wiil be overwritten
     block = deserialize_frame(serialized, d);
     show_recieved_block(block, toggled_list);
     // step 9
     block = apply_hammingcode(block);
-    show_ascii_block(block, false);
+    show_ascii_block(block, AFTER_REMOVING_HAMMING);
+    // step 10
+    std::cout << "output frame: " << mk_string(block);
 
-    std::cout << "end\n";
+    // clean up
+    delete toggled_list;
     delete serialized;
     for (auto b : *block)
         delete b;
